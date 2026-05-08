@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f7b3a" />
+  <title>Lixeira Inteligente — Classificador de Lixo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">♻️</span>
+      <div>
+        <h1>Lixeira Inteligente</h1>
+        <p class="subtitle">Aponte a câmera e descubra como descartar</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="app">
+    <section class="camera-stage" id="cameraStage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas" hidden></canvas>
+
+      <div class="overlay" id="overlay">
+        <div class="reticle" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="status-pill" id="statusPill">Iniciando câmera…</div>
+      </div>
+
+      <div class="result-card hidden" id="resultCard" data-category="indefinido">
+        <div class="result-head">
+          <div class="badge" id="badgeIcon" aria-hidden="true">❔</div>
+          <div class="result-text">
+            <span class="result-label" id="categoryLabel">Aguardando…</span>
+            <strong class="result-object" id="objectName">—</strong>
+          </div>
+          <div class="confidence" id="confidence" aria-label="Confiança">—</div>
+        </div>
+        <p class="explanation" id="explanation">
+          Posicione um item de lixo na frente da câmera para identificar.
+        </p>
+        <div class="bin-tag" id="binTag">Lixeira: —</div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button id="startBtn" class="primary">📷 Ligar câmera</button>
+      <button id="captureBtn" class="secondary" disabled>📸 Identificar agora</button>
+      <button id="switchBtn" class="ghost" disabled title="Trocar câmera">🔄</button>
+    </section>
+
+    <section class="legend" aria-label="Legenda de categorias">
+      <h2>Categorias</h2>
+      <ul class="legend-grid">
+        <li data-category="organico">
+          <span class="dot"></span><strong>Orgânico</strong>
+          <small>restos de comida, cascas, folhas</small>
+        </li>
+        <li data-category="papel">
+          <span class="dot"></span><strong>Papel</strong>
+          <small>livros, papelão, jornais, embalagens</small>
+        </li>
+        <li data-category="metal">
+          <span class="dot"></span><strong>Metal</strong>
+          <small>latas, talheres, pregos, panelas</small>
+        </li>
+        <li data-category="vidro">
+          <span class="dot"></span><strong>Vidro</strong>
+          <small>garrafas, copos, frascos, vasos</small>
+        </li>
+      </ul>
+    </section>
+
+    <footer class="foot">
+      <p>Modelo de IA roda no seu navegador (TensorFlow.js + MobileNet).</p>
+      <p class="hint">Para melhor resultado: boa iluminação, fundo neutro e item centralizado.</p>
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+  <script src="classifier.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
