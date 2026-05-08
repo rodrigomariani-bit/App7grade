@@ -49,15 +49,15 @@
   const statusDot = $("statusDot");
   const statusText = $("statusText");
 
-  const resultEl = $("result");
-  const resultHeader = resultEl.querySelector(".result-header");
-  const resultBadge = $("resultBadge");
+  const resultModal = $("resultModal");
+  const resultCard = resultModal.querySelector(".result-card");
+  const resultPhoto = $("resultPhoto");
   const resultIcon = $("resultIcon");
   const resultCategory = $("resultCategory");
   const resultObject = $("resultObject");
   const resultConfidence = $("resultConfidence");
   const resultExplanation = $("resultExplanation");
-  const resultBin = $("resultBin");
+  const resultBinText = $("resultBinText");
 
   const settingsModal = $("settingsModal");
   const onboardingModal = $("onboardingModal");
@@ -119,6 +119,13 @@
 
   document.querySelectorAll("[data-close-modal]").forEach((el) => {
     el.addEventListener("click", () => closeModal(settingsModal));
+  });
+  document.querySelectorAll("[data-close-result]").forEach((el) => {
+    el.addEventListener("click", () => closeModal(resultModal));
+  });
+  // Tecla Esc fecha o modal de resultado.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !resultModal.hidden) closeModal(resultModal);
   });
   settingsBtn.addEventListener("click", openSettings);
 
@@ -236,8 +243,8 @@
         imageBase64,
         signal: inFlight.signal,
       });
-      showResult(result);
-      setStatus("Pronto. Analise o resultado abaixo.", "live");
+      showResult(result, imageBase64);
+      setStatus("Pronto.", "live");
     } catch (err) {
       if (err && err.name === "AbortError") {
         setStatus("Análise cancelada.");
@@ -256,14 +263,16 @@
     }
   }
 
-  function showResult(r) {
+  function showResult(r, imageBase64) {
     const info = CATEGORY_INFO[r.category] || CATEGORY_INFO.indefinido;
-    resultHeader.dataset.category = r.category;
+
+    resultPhoto.src = "data:image/jpeg;base64," + imageBase64;
+    resultCard.dataset.category = r.category;
     resultIcon.innerHTML = info.icon;
     resultCategory.textContent = info.label;
     resultObject.textContent = r.object_name;
     resultExplanation.textContent = r.reasoning;
-    resultBin.querySelector(".bin-text").textContent = info.bin;
+    resultBinText.textContent = info.bin;
 
     resultConfidence.textContent =
       r.confidence === "alta" ? "Confiança alta" :
@@ -271,15 +280,7 @@
       "Confiança baixa";
     resultConfidence.className = "result-confidence " + r.confidence;
 
-    resultEl.hidden = false;
-    // re-aplica a animação
-    resultEl.style.animation = "none";
-    resultEl.offsetHeight;
-    resultEl.style.animation = "";
-
-    requestAnimationFrame(() => {
-      resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
+    openModal(resultModal);
   }
 
   // ----- Eventos -----
