@@ -1,23 +1,22 @@
 /*
- * Cliente do Claude Messages API direto do navegador.
+ * Cliente da Google Gemini API direto do navegador (CORS oficial).
  *
- * Usa o cabeçalho `anthropic-dangerous-direct-browser-access: true` para
- * permitir CORS em chamadas client-side. Adequado a apps client-only onde
- * cada usuário fornece sua própria API key.
+ * Usa o endpoint generateContent do Generative Language API com a chave
+ * passada via query string (?key=...). Adequado a apps client-only onde
+ * cada usuário fornece sua própria chave do Google AI Studio.
  *
- * Saída forçada por JSON Schema (output_config.format) — devolve sempre
+ * Saída forçada por JSON Schema (responseSchema) — devolve sempre
  * { category, object_name, confidence, reasoning } no formato exato.
  */
 (function (global) {
   "use strict";
 
-  const API_URL = "https://api.anthropic.com/v1/messages";
-  const ANTHROPIC_VERSION = "2023-06-01";
+  const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-  // Categorias suportadas pela lixeira inteligente.
   const CATEGORIES = ["organico", "papel", "metal", "vidro", "indefinido"];
 
-  // Esquema da resposta — força a IA a devolver SEMPRE neste formato.
+  // Schema de saída — Gemini aceita um subset de OpenAPI 3.0.
+  // Importante: NÃO usar `additionalProperties` (não é suportado).
   const RESPONSE_SCHEMA = {
     type: "object",
     properties: {
@@ -30,13 +29,13 @@
       object_name: {
         type: "string",
         description:
-          "Nome curto do objeto em português brasileiro, mesmo que seja um resto/sobra. Ex.: 'Casca de banana', 'Maçã mordida', 'Lata de refrigerante amassada', 'Garrafa de cerveja'. Máximo 6 palavras.",
+          "Nome curto do objeto em português brasileiro, mesmo que seja resto/sobra. Ex.: 'Casca de banana', 'Maçã mordida', 'Lata de refrigerante amassada', 'Garrafa de cerveja'. Máximo 6 palavras.",
       },
       confidence: {
         type: "string",
         enum: ["alta", "media", "baixa"],
         description:
-          "Confiança na identificação. 'alta' quando o item é claro e bem visível; 'media' quando há alguma ambiguidade; 'baixa' quando o item está mal iluminado, parcialmente visível, ou difícil de classificar.",
+          "'alta' quando o item é claro e bem visível; 'media' quando há alguma ambiguidade; 'baixa' quando está mal iluminado, parcialmente visível, ou difícil de classificar.",
       },
       reasoning: {
         type: "string",
@@ -45,12 +44,9 @@
       },
     },
     required: ["category", "object_name", "confidence", "reasoning"],
-    additionalProperties: false,
+    propertyOrdering: ["category", "object_name", "confidence", "reasoning"],
   };
 
-  // System prompt — define o papel da IA. Marcado com cache_control para
-  // ativar prompt caching nas requisições subsequentes (quando o tamanho
-  // do prefixo cruzar o mínimo do modelo).
   const SYSTEM_PROMPT = `Você é a IA visual de uma lixeira inteligente brasileira que separa resíduos automaticamente. Seu trabalho é olhar uma foto e classificar o item em UMA destas quatro categorias da Resolução Conama 275/2001:
 
 1) "organico" — Resíduo biológico que se decompõe naturalmente.
@@ -81,18 +77,18 @@ Regras adicionais:
 - Lata amassada continua sendo lata (metal).
 - Quando houver ambiguidade vidro x plástico, observe brilho, espessura e marca da boca da garrafa: vidro tem reflexo mais nítido e parede mais grossa.
 
-Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além do JSON.`;
+Devolva SEMPRE um JSON estritamente no formato definido pelo schema.`;
 
   /**
-   * Classifica uma imagem usando o Claude Vision.
+   * Classifica uma imagem usando o Gemini.
    *
    * @param {object} opts
-   * @param {string} opts.apiKey   Chave da API Anthropic (sk-ant-...).
-   * @param {string} opts.model    ID do modelo (claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5).
-   * @param {string} opts.imageBase64  Imagem JPEG codificada em base64 (sem o prefixo data:).
-   * @param {string} [opts.mediaType]  Tipo MIME da imagem. Padrão "image/jpeg".
-   * @param {AbortSignal} [opts.signal]  AbortSignal opcional para cancelar.
-   * @returns {Promise<{category: string, object_name: string, confidence: string, reasoning: string}>}
+   * @param {string} opts.apiKey   Chave da API do Google AI Studio (AIza...).
+   * @param {string} opts.model    ID do modelo Gemini (ex. gemini-2.5-flash).
+   * @param {string} opts.imageBase64  JPEG codificado em base64 (sem prefixo data:).
+   * @param {string} [opts.mediaType="image/jpeg"]
+   * @param {AbortSignal} [opts.signal]
+   * @returns {Promise<{category, object_name, confidence, reasoning}>}
    */
   async function classifyImage(opts) {
     const {
@@ -106,53 +102,51 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além 
     if (!apiKey) throw new ApiError("missing_api_key", "Chave de API não configurada.");
     if (!imageBase64) throw new ApiError("missing_image", "Sem imagem para classificar.");
 
+    const url =
+      API_BASE + "/" + encodeURIComponent(model) +
+      ":generateContent?key=" + encodeURIComponent(apiKey);
+
     const body = {
-      model,
-      max_tokens: 600,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
+      systemInstruction: {
+        parts: [{ text: SYSTEM_PROMPT }],
+      },
+      contents: [
         {
           role: "user",
-          content: [
+          parts: [
             {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType,
+              inlineData: {
+                mimeType: mediaType,
                 data: imageBase64,
               },
             },
             {
-              type: "text",
-              text: "Classifique este item segundo as regras. Devolva apenas o JSON.",
+              text: "Classifique este item seguindo as regras. Devolva apenas o JSON.",
             },
           ],
         },
       ],
-      output_config: {
-        format: {
-          type: "json_schema",
-          schema: RESPONSE_SCHEMA,
-        },
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: RESPONSE_SCHEMA,
+        // Desliga "thinking" no Flash/Flash-Lite pra reduzir latência. Em Pro
+        // o thinking é dinâmico e este campo é ignorado.
+        thinkingConfig: { thinkingBudget: 0 },
       },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+      ],
     };
 
     let response;
     try {
-      response = await fetch(API_URL, {
+      response = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": ANTHROPIC_VERSION,
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal,
       });
@@ -168,9 +162,13 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além 
     if (!response.ok) {
       let detail = null;
       try { detail = await response.json(); } catch (_) {}
-      const errType = (detail && detail.error && detail.error.type) || "api_error";
+      const errStatus = (detail && detail.error && detail.error.status) || "";
       const errMsg = (detail && detail.error && detail.error.message) || `HTTP ${response.status}`;
-      throw new ApiError(mapErrorType(response.status, errType), friendlyError(response.status, errType, errMsg), detail);
+      throw new ApiError(
+        mapErrorType(response.status, errStatus, errMsg),
+        friendlyError(response.status, errStatus, errMsg),
+        detail
+      );
     }
 
     const data = await response.json();
@@ -178,20 +176,40 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além 
   }
 
   function parseResult(data) {
-    // Resposta do Claude: { content: [{type: "text", text: "..."}] }
-    const blocks = (data && data.content) || [];
-    const textBlock = blocks.find((b) => b.type === "text");
-    if (!textBlock || !textBlock.text) {
+    // Resposta Gemini: candidates[0].content.parts[0].text contém o JSON
+    // (porque pedimos responseMimeType: application/json).
+    const candidate = data && data.candidates && data.candidates[0];
+    if (!candidate) {
       throw new ApiError(
         "empty_response",
-        "A IA devolveu uma resposta vazia. Tente de novo."
+        "A IA não devolveu nenhuma resposta. Tente de novo.",
+        data
+      );
+    }
+
+    // Bloqueio por safety
+    if (candidate.finishReason === "SAFETY" || candidate.finishReason === "BLOCKLIST") {
+      throw new ApiError(
+        "safety_block",
+        "A imagem foi bloqueada pelos filtros de segurança do Gemini. Tente outra foto.",
+        candidate
+      );
+    }
+
+    const parts = candidate.content && candidate.content.parts;
+    const textBlock = parts && parts.find((p) => typeof p.text === "string");
+    if (!textBlock) {
+      throw new ApiError(
+        "empty_response",
+        "A IA devolveu uma resposta vazia. Tente de novo.",
+        candidate
       );
     }
 
     let parsed;
     try {
       parsed = JSON.parse(textBlock.text);
-    } catch (err) {
+    } catch (_) {
       throw new ApiError(
         "invalid_json",
         "A IA devolveu uma resposta em formato inesperado.",
@@ -199,7 +217,7 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além 
       );
     }
 
-    // Validação leve: garante o esqueleto esperado.
+    // Validação leve
     if (!CATEGORIES.includes(parsed.category)) parsed.category = "indefinido";
     if (!["alta", "media", "baixa"].includes(parsed.confidence)) parsed.confidence = "media";
     parsed.object_name = String(parsed.object_name || "Objeto não identificado");
@@ -208,23 +226,33 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além 
     return parsed;
   }
 
-  function mapErrorType(status, errType) {
+  function mapErrorType(status, errStatus, msg) {
+    if (status === 400 && /API key not valid|API_KEY_INVALID/i.test(msg)) return "auth";
     if (status === 401) return "auth";
     if (status === 403) return "permission";
     if (status === 429) return "rate_limit";
     if (status >= 500) return "server";
-    if (errType === "invalid_request_error") return "bad_request";
+    if (errStatus === "INVALID_ARGUMENT") return "bad_request";
     return "api_error";
   }
 
-  function friendlyError(status, errType, msg) {
-    if (status === 401) return "Chave de API inválida. Verifique nas Configurações.";
-    if (status === 403) return "Sua chave não tem permissão para usar este modelo.";
-    if (status === 429) return "Muitas requisições. Aguarde alguns segundos e tente de novo.";
-    if (status === 400 && /credit|billing/i.test(msg)) {
-      return "Sua conta Anthropic não tem créditos. Adicione um método de pagamento no console.";
+  function friendlyError(status, errStatus, msg) {
+    if (status === 400 && /API key not valid|API_KEY_INVALID/i.test(msg)) {
+      return "Chave de API inválida. Verifique nas Configurações.";
     }
-    if (status >= 500) return "A API está temporariamente indisponível. Tente novamente em instantes.";
+    if (status === 401) return "Chave de API inválida ou ausente.";
+    if (status === 403) {
+      if (/quota|billing/i.test(msg)) {
+        return "Cota grátis esgotada por hoje. Espere um pouco ou ative o billing no Google Cloud.";
+      }
+      return "Sua chave não tem permissão para esse modelo.";
+    }
+    if (status === 429) {
+      return "Muitas requisições — limite de uso/minuto. Aguarde alguns segundos e tente de novo.";
+    }
+    if (status >= 500) {
+      return "A API está temporariamente indisponível. Tente novamente em instantes.";
+    }
     return "Erro na API: " + msg;
   }
 
@@ -237,17 +265,6 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além 
     }
   }
 
-  /**
-   * Captura um frame do <video> em um JPEG redimensionado e devolve a string
-   * base64 (sem o prefixo data:).
-   *
-   * Limita a maior dimensão a `maxSize` para reduzir custo de tokens da API.
-   *
-   * @param {HTMLVideoElement} video
-   * @param {number} [maxSize=1024]
-   * @param {number} [quality=0.85]
-   * @returns {string} base64 sem prefixo
-   */
   function captureFrameBase64(video, maxSize = 1024, quality = 0.85) {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) throw new Error("Vídeo ainda não carregou.");
@@ -265,10 +282,11 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema. Nada além 
     return dataUrl.split(",")[1];
   }
 
-  global.ClaudeAPI = {
+  global.VisionAPI = {
     classifyImage,
     captureFrameBase64,
     ApiError,
     CATEGORIES,
+    PROVIDER: "gemini",
   };
 })(window);

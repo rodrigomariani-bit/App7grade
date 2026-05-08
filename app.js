@@ -33,8 +33,8 @@
     },
   };
 
-  const SETTINGS_KEY = "lixeira-inteligente.settings.v1";
-  const DEFAULT_MODEL = "claude-opus-4-7";
+  const SETTINGS_KEY = "lixeira-inteligente.settings.v2";
+  const DEFAULT_MODEL = "gemini-2.5-flash";
 
   // ----- DOM -----
   const $ = (id) => document.getElementById(id);
@@ -129,8 +129,8 @@
   saveSettingsBtn.addEventListener("click", () => {
     const apiKey = apiKeyInput.value.trim();
     const model = modelSelect.value;
-    if (apiKey && !apiKey.startsWith("sk-ant-")) {
-      if (!confirm("Esta chave não começa com 'sk-ant-'. Salvar mesmo assim?")) return;
+    if (apiKey && !apiKey.startsWith("AIza")) {
+      if (!confirm("Esta chave não começa com 'AIza' (formato esperado das chaves do Google AI Studio). Salvar mesmo assim?")) return;
     }
     saveSettings({ apiKey, model });
     closeModal(settingsModal);
@@ -216,7 +216,7 @@
 
     let imageBase64;
     try {
-      imageBase64 = ClaudeAPI.captureFrameBase64(video);
+      imageBase64 = VisionAPI.captureFrameBase64(video);
     } catch (err) {
       setStatus("Não consegui capturar a imagem. Aguarde a câmera carregar.", "error");
       return;
@@ -230,7 +230,7 @@
     inFlight = new AbortController();
 
     try {
-      const result = await ClaudeAPI.classifyImage({
+      const result = await VisionAPI.classifyImage({
         apiKey: settings.apiKey,
         model: settings.model,
         imageBase64,
@@ -241,7 +241,7 @@
     } catch (err) {
       if (err && err.name === "AbortError") {
         setStatus("Análise cancelada.");
-      } else if (err instanceof ClaudeAPI.ApiError) {
+      } else if (err instanceof VisionAPI.ApiError) {
         console.error("ApiError:", err.type, err.detail);
         setStatus(err.message, "error");
         if (err.type === "auth") openSettings();

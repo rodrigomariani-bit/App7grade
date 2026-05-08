@@ -131,7 +131,7 @@
     </section>
 
     <footer class="foot">
-      <p>Reconhecimento por IA visual da Anthropic (Claude). A imagem é enviada apenas para a API e não fica armazenada.</p>
+      <p>Reconhecimento por IA visual do Google (Gemini). A imagem é enviada apenas para a API e não fica armazenada.</p>
     </footer>
   </main>
 
@@ -148,27 +148,27 @@
 
       <div class="modal-body">
         <label class="field">
-          <span class="field-label">Chave da API Anthropic</span>
+          <span class="field-label">Chave da API Google AI Studio</span>
           <div class="field-input">
-            <input id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+            <input id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
             <button class="show-toggle" id="showKeyBtn" type="button" aria-label="Mostrar/ocultar chave">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
           <small class="field-hint">
-            A chave fica salva apenas neste navegador. Não enviamos para nenhum servidor além da Anthropic. Pegue a sua em <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+            A chave fica salva apenas neste navegador. Não enviamos para nenhum servidor além do Google. Pegue a sua em <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a>.
           </small>
         </label>
 
         <label class="field">
           <span class="field-label">Modelo</span>
           <select id="modelSelect">
-            <option value="claude-opus-4-7">Claude Opus 4.7 — máxima precisão</option>
-            <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — equilibrado</option>
-            <option value="claude-haiku-4-5">Claude Haiku 4.5 — rápido e barato</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro — máxima precisão</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash — equilibrado (recomendado)</option>
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite — mais rápido e leve</option>
           </select>
           <small class="field-hint">
-            Para sala de aula com muitos alunos, o <strong>Haiku 4.5</strong> reduz bastante o custo. Para máxima precisão, use o <strong>Opus 4.7</strong>.
+            Para sala de aula, o <strong>Flash</strong> é o melhor equilíbrio. O <strong>Flash-Lite</strong> tem o limite gratuito mais alto. O <strong>Pro</strong> é o mais preciso, mas o limite gratuito é menor.
           </small>
         </label>
       </div>
@@ -189,14 +189,14 @@
       </header>
       <div class="modal-body">
         <p class="onboard-text">
-          Para classificar resíduos com a IA da Anthropic, você precisa de uma <strong>chave de API</strong>. É grátis criar:
+          Para classificar resíduos com a IA do Google (Gemini), você precisa de uma <strong>chave de API</strong>. É grátis com qualquer conta Google:
         </p>
         <ol class="onboard-steps">
-          <li>Crie uma conta em <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a></li>
-          <li>Vá em <em>Settings → API Keys</em> e clique em <em>Create Key</em></li>
-          <li>Copie a chave (começa com <code>sk-ant-</code>) e cole aqui ao lado</li>
+          <li>Acesse <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> com sua conta Google</li>
+          <li>Clique em <em>Create API key</em></li>
+          <li>Copie a chave (começa com <code>AIza</code>) e cole na próxima tela</li>
         </ol>
-        <p class="onboard-text">A chave fica salva só no seu navegador.</p>
+        <p class="onboard-text">A chave fica salva só no seu navegador. O Google AI Studio tem cota grátis suficiente para uso em sala de aula.</p>
       </div>
       <footer class="modal-foot">
         <button class="btn btn-primary" id="onboardOpenSettings">Inserir minha chave</button>
@@ -204,7 +204,7 @@
     </div>
   </div>
 
-  <script src="claude-api.js"></script>
+  <script src="gemini-api.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
