@@ -17,67 +17,72 @@
 
   // Schema de saída — Gemini aceita um subset de OpenAPI 3.0.
   // Importante: NÃO usar `additionalProperties` (não é suportado).
+  //
+  // `propertyOrdering` controla a ORDEM em que o modelo GERA cada campo.
+  // Colocamos "object_name" e "reasoning" antes de "category" para forçar
+  // chain-of-thought: o modelo descreve o item e pensa nas regras antes
+  // de se comprometer com uma categoria. Isso reduz drasticamente a
+  // tendência de cair em "indefinido" por excesso de cautela.
   const RESPONSE_SCHEMA = {
     type: "object",
     properties: {
-      category: {
-        type: "string",
-        enum: CATEGORIES,
-        description:
-          "Categoria do resíduo segundo a Resolução Conama 275/2001. Use 'indefinido' apenas quando o objeto não é claramente identificável ou pertence a uma categoria fora dessas quatro (ex.: plástico, isopor, eletrônicos, pilhas, tecido).",
-      },
       object_name: {
         type: "string",
         description:
           "Nome curto do objeto em português brasileiro, mesmo que seja resto/sobra. Ex.: 'Casca de banana', 'Maçã mordida', 'Lata de refrigerante amassada', 'Garrafa de cerveja'. Máximo 6 palavras.",
       },
+      reasoning: {
+        type: "string",
+        description:
+          "Pense em voz alta: descreva o que vê, qual material parece ser e por que se encaixa em UMA das 4 categorias principais. 1 a 2 frases curtas, em português brasileiro simples (público escolar, 7º ano).",
+      },
       confidence: {
         type: "string",
         enum: ["alta", "media", "baixa"],
         description:
-          "'alta' quando o item é claro e bem visível; 'media' quando há alguma ambiguidade; 'baixa' quando está mal iluminado, parcialmente visível, ou difícil de classificar.",
+          "'alta' quando o item é claro; 'media' quando há alguma ambiguidade; 'baixa' quando a foto está mal iluminada ou borrada.",
       },
-      reasoning: {
+      category: {
         type: "string",
+        enum: CATEGORIES,
         description:
-          "Em 1 a 2 frases curtas, em português brasileiro e linguagem simples (público escolar, 7º ano), explique POR QUE este objeto pertence a essa categoria. Evite jargão.",
+          "Categoria final, baseada no raciocínio acima. Use 'indefinido' SOMENTE para plástico, isopor, eletrônico, pilha, tecido, ou se realmente não houver objeto identificável.",
       },
     },
-    required: ["category", "object_name", "confidence", "reasoning"],
-    propertyOrdering: ["category", "object_name", "confidence", "reasoning"],
+    required: ["object_name", "reasoning", "confidence", "category"],
+    propertyOrdering: ["object_name", "reasoning", "confidence", "category"],
   };
 
-  const SYSTEM_PROMPT = `Você é a IA visual de uma lixeira inteligente brasileira que separa resíduos automaticamente. Seu trabalho é olhar uma foto e classificar o item em UMA destas quatro categorias da Resolução Conama 275/2001:
+  const SYSTEM_PROMPT = `Você é a IA visual de uma lixeira inteligente brasileira. Olhe a foto e classifique o item em UMA destas 4 categorias da Resolução Conama 275/2001:
 
-1) "organico" — Resíduo biológico que se decompõe naturalmente.
-   Exemplos: restos de comida (cozida ou crua), cascas de frutas/legumes/ovos, borra de café, sachês de chá, folhas, podas, talos, sementes, ossos, guardanapo sujo de comida, comida estragada.
+🟫 ORGÂNICO — qualquer resto biológico que se decompõe.
+   Ex.: cascas de fruta/legume/ovo, restos de comida (cozida ou crua), pão velho, borra de café, sachê de chá, folhas, podas, talos, sementes, ossos, guardanapo sujo de comida.
 
-2) "papel" — Material celulósico SECO E LIMPO.
-   Exemplos: jornais, revistas, livros, cadernos, folhas, caixas de papelão, embalagens cartonadas (Tetra Pak limpas), envelopes, papel de presente sem plástico.
-   ⚠ Papel sujo de comida vai em ORGÂNICO. Papel plastificado/parafinado vai em INDEFINIDO.
+📘 PAPEL — material celulósico SECO E LIMPO.
+   Ex.: livros, cadernos, jornais, revistas, folhas avulsas, papelão, caixa de cereal, embalagem cartonada (Tetra Pak limpa), envelopes, papel de presente sem plástico.
 
-3) "metal" — Itens metálicos.
-   Exemplos: latas de alumínio (refrigerante, cerveja, energético), latas de aço (conserva, leite condensado, sardinha), tampas metálicas, talheres, panelas, frigideiras, ferramentas, pregos, parafusos, fios, sucata, papel-alumínio.
+🥫 METAL — itens metálicos.
+   Ex.: latas de alumínio (refrigerante, cerveja, energético), latas de aço (sardinha, leite condensado, conserva), tampas metálicas, talheres, panelas, frigideiras, ferramentas, pregos, parafusos, papel-alumínio.
 
-4) "vidro" — Itens de vidro.
-   Exemplos: garrafas (cerveja, vinho, refrigerante, suco), potes (geleia, palmito, conserva), copos, taças, frascos de cosméticos/perfume/remédio, espelhos.
+🍾 VIDRO — itens de vidro.
+   Ex.: garrafas (cerveja, vinho, refrigerante, suco), potes (geleia, palmito, conserva), copos, taças, frascos de cosméticos/perfume/remédio.
 
-Quando usar "indefinido":
-- Plástico de qualquer tipo (PET, PEAD, sacolas, isopor, embalagens flexíveis, PVC).
-- Eletrônicos, pilhas, baterias, lâmpadas.
-- Tecido, couro, calçados, fraldas.
-- Madeira tratada, pneus.
-- Quando não houver objeto claro de descarte na imagem (paisagem, pessoa, cena genérica).
-- Quando a imagem está borrada ou escura demais para identificar.
+❓ INDEFINIDO — APENAS quando NENHUMA das 4 acima se aplica:
+   • Plástico (PET, sacolas, isopor, embalagem flexível, garrafa transparente leve)
+   • Eletrônicos, pilhas, baterias, lâmpadas
+   • Tecido, couro, calçados, fraldas
+   • Madeira tratada, pneus
+   • Foto sem objeto claro (paisagem, pessoa, cena vazia)
+   • Foto borrada ou escura demais
 
-Regras adicionais:
-- Identifique o objeto ESPECÍFICO mesmo que seja um resto. Casca de banana é "Casca de banana" (orgânico), não "Banana".
-- Maçã mordida ou parcialmente comida é orgânico.
-- Garrafa PET (transparente, leve, com listras de injeção no fundo) é PLÁSTICO → "indefinido". Garrafa de vidro é mais pesada, mais grossa e geralmente colorida.
-- Lata amassada continua sendo lata (metal).
-- Quando houver ambiguidade vidro x plástico, observe brilho, espessura e marca da boca da garrafa: vidro tem reflexo mais nítido e parede mais grossa.
+REGRAS IMPORTANTES:
+1. SEMPRE prefira uma das 4 categorias principais quando o item plausivelmente se encaixa nelas. "Indefinido" é o ÚLTIMO recurso.
+2. Identifique o item ESPECÍFICO mesmo se for resto. "Casca de banana" (orgânico), não "Banana". "Maçã mordida" (orgânico). "Lata amassada" continua sendo lata (metal).
+3. Garrafa transparente fina e leve = plástico PET → indefinido. Garrafa pesada, parede grossa, geralmente colorida e com brilho nítido = vidro.
+4. Embalagem cartonada (caixa de leite, de suco) é PAPEL (mesmo que tenha película interna).
+5. Se o objeto NÃO está claro mas você consegue palpitar com base no formato/cor, use confiança "media" ou "baixa" e ESCOLHA uma das 4 principais — não fuja para indefinido.
 
-Devolva SEMPRE um JSON estritamente no formato definido pelo schema.`;
+Responda primeiro descrevendo o item e raciocinando. Só então comprometa-se com a categoria.`;
 
   /**
    * Classifica uma imagem usando o Gemini.
@@ -127,12 +132,12 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema.`;
         },
       ],
       generationConfig: {
-        temperature: 0,
+        temperature: 0.2,
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,
-        // Desliga "thinking" no Flash/Flash-Lite pra reduzir latência. Em Pro
-        // o thinking é dinâmico e este campo é ignorado.
-        thinkingConfig: { thinkingBudget: 0 },
+        // Sem thinkingConfig: o Gemini 2.5 (Flash/Flash-Lite/Pro) usa
+        // thinking dinâmico por padrão, o que dá decisões muito melhores
+        // do que com thinking desligado.
       },
       safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
@@ -197,7 +202,9 @@ Devolva SEMPRE um JSON estritamente no formato definido pelo schema.`;
     }
 
     const parts = candidate.content && candidate.content.parts;
-    const textBlock = parts && parts.find((p) => typeof p.text === "string");
+    // Ignora partes marcadas como "thought" (raciocínio interno) — só
+    // queremos o JSON final que o modelo retornou.
+    const textBlock = parts && parts.find((p) => typeof p.text === "string" && !p.thought);
     if (!textBlock) {
       throw new ApiError(
         "empty_response",
