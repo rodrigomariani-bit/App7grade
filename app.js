@@ -1,105 +1,197 @@
 /*
- * Lixeira Inteligente — controle da câmera + inferência com MobileNet.
- * O modelo é carregado uma vez e roda continuamente sobre frames do <video>.
+ * Lixeira Inteligente — orquestra UI, câmera e chamadas ao Claude Vision.
  */
 (function () {
   "use strict";
 
-  const video = document.getElementById("video");
-  const canvas = document.getElementById("canvas");
-  const startBtn = document.getElementById("startBtn");
-  const captureBtn = document.getElementById("captureBtn");
-  const switchBtn = document.getElementById("switchBtn");
-  const statusPill = document.getElementById("statusPill");
-  const resultCard = document.getElementById("resultCard");
-  const badgeIcon = document.getElementById("badgeIcon");
-  const categoryLabel = document.getElementById("categoryLabel");
-  const objectName = document.getElementById("objectName");
-  const confidenceEl = document.getElementById("confidence");
-  const explanationEl = document.getElementById("explanation");
-  const binTagEl = document.getElementById("binTag");
+  // ----- Constantes da UI -----
+  const CATEGORY_INFO = {
+    organico: {
+      label: "Orgânico",
+      bin: "Lixeira marrom — pode virar adubo",
+      icon: '<path d="M12 22s-7-5-7-12a7 7 0 0 1 14 0c0 7-7 12-7 12z"/><path d="M12 14a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>',
+    },
+    papel: {
+      label: "Papel",
+      bin: "Lixeira azul — mantenha seco e limpo",
+      icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h2"/>',
+    },
+    metal: {
+      label: "Metal",
+      bin: "Lixeira amarela — lave antes de descartar",
+      icon: '<path d="M8 2h8v4l-1 2v10a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2V8L8 6z"/><path d="M8 6h8"/>',
+    },
+    vidro: {
+      label: "Vidro",
+      bin: "Lixeira verde — cuidado com cacos",
+      icon: '<path d="M10 2h4v3l2 3v11a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3V8l2-3z"/>',
+    },
+    indefinido: {
+      label: "Não identificado",
+      bin: "Tente outra foto ou outro ângulo",
+      icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7M12 17h.01"/>',
+    },
+  };
 
-  let model = null;
+  const SETTINGS_KEY = "lixeira-inteligente.settings.v1";
+  const DEFAULT_MODEL = "claude-opus-4-7";
+
+  // ----- DOM -----
+  const $ = (id) => document.getElementById(id);
+  const video = $("video");
+  const cameraEmpty = $("cameraEmpty");
+  const cameraBusy = $("cameraBusy");
+  const startBtn = $("startBtn");
+  const startBtnLabel = $("startBtnLabel");
+  const captureBtn = $("captureBtn");
+  const switchBtn = $("switchBtn");
+  const settingsBtn = $("settingsBtn");
+  const statusDot = $("statusDot");
+  const statusText = $("statusText");
+
+  const resultEl = $("result");
+  const resultHeader = resultEl.querySelector(".result-header");
+  const resultBadge = $("resultBadge");
+  const resultIcon = $("resultIcon");
+  const resultCategory = $("resultCategory");
+  const resultObject = $("resultObject");
+  const resultConfidence = $("resultConfidence");
+  const resultExplanation = $("resultExplanation");
+  const resultBin = $("resultBin");
+
+  const settingsModal = $("settingsModal");
+  const onboardingModal = $("onboardingModal");
+  const apiKeyInput = $("apiKeyInput");
+  const showKeyBtn = $("showKeyBtn");
+  const modelSelect = $("modelSelect");
+  const saveSettingsBtn = $("saveSettingsBtn");
+  const onboardOpenSettings = $("onboardOpenSettings");
+
+  // ----- Estado -----
   let stream = null;
-  let facingMode = "environment"; // câmera traseira por padrão
-  let loopHandle = null;
-  let inferenceBusy = false;
-  const LOOP_INTERVAL_MS = 1000;
+  let facingMode = "environment";
+  let inFlight = null; // AbortController da requisição atual
 
-  // Suaviza variações: só troca o card se a nova categoria/objeto mudar
-  // por 2 frames seguidos OU se a confiança subir bem acima da atual.
-  let lastShown = { category: null, objectName: null, confidence: 0 };
-  let pendingCandidate = null;
-  let pendingCount = 0;
-
-  function setStatus(text) {
-    statusPill.textContent = text;
-  }
-
-  async function loadModel() {
-    if (model) return model;
-    setStatus("Carregando modelo de IA…");
+  // ----- Settings (localStorage) -----
+  function loadSettings() {
     try {
-      // MobileNet v2 com alpha 1.0 — bom equilíbrio precisão/velocidade.
-      model = await mobilenet.load({ version: 2, alpha: 1.0 });
-      setStatus("Modelo pronto. Aponte a câmera para um item.");
-      return model;
-    } catch (err) {
-      console.error("Falha ao carregar o modelo:", err);
-      setStatus("Erro ao carregar a IA. Verifique sua conexão.");
-      throw err;
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return { apiKey: "", model: DEFAULT_MODEL };
+      const parsed = JSON.parse(raw);
+      return {
+        apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
+        model: typeof parsed.model === "string" ? parsed.model : DEFAULT_MODEL,
+      };
+    } catch (_) {
+      return { apiKey: "", model: DEFAULT_MODEL };
     }
   }
+  function saveSettings(s) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  }
+  function hasApiKey() {
+    return !!loadSettings().apiKey;
+  }
 
+  // ----- Status pill -----
+  function setStatus(text, kind) {
+    statusText.textContent = text;
+    statusDot.className = "status-dot" + (kind ? " " + kind : "");
+  }
+
+  // ----- Modais -----
+  function openModal(modal) {
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+  function closeModal(modal) {
+    modal.hidden = true;
+    document.body.style.overflow = "";
+  }
+  function openSettings() {
+    const s = loadSettings();
+    apiKeyInput.value = s.apiKey;
+    apiKeyInput.type = "password";
+    modelSelect.value = s.model;
+    openModal(settingsModal);
+    setTimeout(() => apiKeyInput.focus(), 80);
+  }
+
+  document.querySelectorAll("[data-close-modal]").forEach((el) => {
+    el.addEventListener("click", () => closeModal(settingsModal));
+  });
+  settingsBtn.addEventListener("click", openSettings);
+
+  showKeyBtn.addEventListener("click", () => {
+    apiKeyInput.type = apiKeyInput.type === "password" ? "text" : "password";
+  });
+
+  saveSettingsBtn.addEventListener("click", () => {
+    const apiKey = apiKeyInput.value.trim();
+    const model = modelSelect.value;
+    if (apiKey && !apiKey.startsWith("sk-ant-")) {
+      if (!confirm("Esta chave não começa com 'sk-ant-'. Salvar mesmo assim?")) return;
+    }
+    saveSettings({ apiKey, model });
+    closeModal(settingsModal);
+    setStatus(apiKey ? "Configurações salvas." : "Chave removida.", apiKey ? "" : "error");
+  });
+
+  onboardOpenSettings.addEventListener("click", () => {
+    closeModal(onboardingModal);
+    openSettings();
+  });
+
+  // ----- Câmera -----
   async function startCamera() {
-    if (stream) return; // já ligado
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setStatus("Seu navegador não permite acesso à câmera.");
+    if (stream) {
+      stopCamera();
       return;
     }
-
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus("Seu navegador não suporta acesso à câmera.", "error");
+      return;
+    }
     setStatus("Pedindo permissão da câmera…");
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facingMode },
           width: { ideal: 1280 },
-          height: { ideal: 720 },
+          height: { ideal: 960 },
         },
         audio: false,
       });
       video.srcObject = stream;
       await video.play();
-      setStatus("Câmera ligada. Identificando…");
-      startBtn.textContent = "⏹️ Parar câmera";
+      cameraEmpty.hidden = true;
+      startBtnLabel.textContent = "Parar câmera";
       captureBtn.disabled = false;
       switchBtn.disabled = false;
-      startLoop();
+      setStatus("Câmera ligada. Pronto para identificar.", "live");
     } catch (err) {
-      console.error("Erro ao acessar a câmera:", err);
-      if (err && err.name === "NotAllowedError") {
-        setStatus("Permissão negada. Habilite a câmera nas configurações.");
-      } else if (err && err.name === "NotFoundError") {
-        setStatus("Nenhuma câmera encontrada.");
-      } else {
-        setStatus("Não foi possível acessar a câmera.");
-      }
+      console.error("getUserMedia:", err);
+      const name = err && err.name;
+      if (name === "NotAllowedError") setStatus("Permissão da câmera negada.", "error");
+      else if (name === "NotFoundError") setStatus("Nenhuma câmera encontrada.", "error");
+      else if (name === "NotReadableError") setStatus("A câmera está em uso por outro app.", "error");
+      else setStatus("Não foi possível acessar a câmera.", "error");
     }
   }
 
   function stopCamera() {
-    stopLoop();
+    if (inFlight) { inFlight.abort(); inFlight = null; }
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       stream = null;
     }
     video.srcObject = null;
-    startBtn.textContent = "📷 Ligar câmera";
+    cameraEmpty.hidden = false;
+    cameraBusy.hidden = true;
+    startBtnLabel.textContent = "Ligar câmera";
     captureBtn.disabled = true;
     switchBtn.disabled = true;
     setStatus("Câmera desligada.");
-    hideResult();
   }
 
   async function switchCamera() {
@@ -109,143 +201,98 @@
     await startCamera();
   }
 
-  function startLoop() {
-    stopLoop();
-    loopHandle = setInterval(() => {
-      runInference().catch((e) => console.warn("inference error", e));
-    }, LOOP_INTERVAL_MS);
-  }
-
-  function stopLoop() {
-    if (loopHandle) {
-      clearInterval(loopHandle);
-      loopHandle = null;
+  // ----- Captura + Classificação -----
+  async function captureAndClassify() {
+    if (!stream) {
+      setStatus("Ligue a câmera primeiro.", "error");
+      return;
     }
-  }
-
-  async function runInference() {
-    if (inferenceBusy) return;
-    if (!model || !video.videoWidth) return;
-    inferenceBusy = true;
-    try {
-      // O MobileNet recebe um HTMLVideoElement diretamente.
-      const predictions = await model.classify(video, 5);
-      const result = WasteClassifier.classifyWaste(predictions);
-      consider(result);
-    } finally {
-      inferenceBusy = false;
-    }
-  }
-
-  // Decide se atualiza o card ou aguarda mais um frame para confirmar.
-  function consider(result) {
-    const sameAsShown =
-      lastShown.category === result.category &&
-      lastShown.objectName === result.objectName;
-
-    // Se é o mesmo do que já está na tela, só atualiza a confiança.
-    if (sameAsShown) {
-      pendingCandidate = null;
-      pendingCount = 0;
-      lastShown.confidence = result.confidence;
-      updateConfidence(result.confidence);
+    const settings = loadSettings();
+    if (!settings.apiKey) {
+      openSettings();
+      setStatus("Insira sua chave de API para identificar.", "error");
       return;
     }
 
-    // Mudança de categoria/objeto: exige confirmação ou confiança alta.
-    const strong = result.confidence >= 0.55;
-    if (
-      pendingCandidate &&
-      pendingCandidate.category === result.category &&
-      pendingCandidate.objectName === result.objectName
-    ) {
-      pendingCount += 1;
-    } else {
-      pendingCandidate = result;
-      pendingCount = 1;
+    let imageBase64;
+    try {
+      imageBase64 = ClaudeAPI.captureFrameBase64(video);
+    } catch (err) {
+      setStatus("Não consegui capturar a imagem. Aguarde a câmera carregar.", "error");
+      return;
     }
 
-    if (strong || pendingCount >= 2) {
+    cameraBusy.hidden = false;
+    captureBtn.disabled = true;
+    setStatus("Enviando para a IA…", "busy");
+
+    if (inFlight) inFlight.abort();
+    inFlight = new AbortController();
+
+    try {
+      const result = await ClaudeAPI.classifyImage({
+        apiKey: settings.apiKey,
+        model: settings.model,
+        imageBase64,
+        signal: inFlight.signal,
+      });
       showResult(result);
-      lastShown = {
-        category: result.category,
-        objectName: result.objectName,
-        confidence: result.confidence,
-      };
-      pendingCandidate = null;
-      pendingCount = 0;
+      setStatus("Pronto. Analise o resultado abaixo.", "live");
+    } catch (err) {
+      if (err && err.name === "AbortError") {
+        setStatus("Análise cancelada.");
+      } else if (err instanceof ClaudeAPI.ApiError) {
+        console.error("ApiError:", err.type, err.detail);
+        setStatus(err.message, "error");
+        if (err.type === "auth") openSettings();
+      } else {
+        console.error(err);
+        setStatus("Erro inesperado ao classificar.", "error");
+      }
+    } finally {
+      cameraBusy.hidden = true;
+      captureBtn.disabled = !stream;
+      inFlight = null;
     }
   }
 
   function showResult(r) {
-    resultCard.dataset.category = r.category;
-    resultCard.classList.remove("hidden");
-    badgeIcon.textContent = r.icon;
-    categoryLabel.textContent = r.categoryLabel;
-    objectName.textContent = r.objectName;
-    explanationEl.textContent = r.explanation;
-    binTagEl.textContent = "Lixeira: " + r.bin;
-    updateConfidence(r.confidence);
+    const info = CATEGORY_INFO[r.category] || CATEGORY_INFO.indefinido;
+    resultHeader.dataset.category = r.category;
+    resultIcon.innerHTML = info.icon;
+    resultCategory.textContent = info.label;
+    resultObject.textContent = r.object_name;
+    resultExplanation.textContent = r.reasoning;
+    resultBin.querySelector(".bin-text").textContent = info.bin;
+
+    resultConfidence.textContent =
+      r.confidence === "alta" ? "Confiança alta" :
+      r.confidence === "media" ? "Confiança média" :
+      "Confiança baixa";
+    resultConfidence.className = "result-confidence " + r.confidence;
+
+    resultEl.hidden = false;
+    // re-aplica a animação
+    resultEl.style.animation = "none";
+    resultEl.offsetHeight;
+    resultEl.style.animation = "";
+
+    requestAnimationFrame(() => {
+      resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   }
 
-  function updateConfidence(p) {
-    const pct = Math.max(0, Math.min(100, Math.round(p * 100)));
-    confidenceEl.textContent = pct + "%";
-  }
-
-  function hideResult() {
-    resultCard.classList.add("hidden");
-    lastShown = { category: null, objectName: null, confidence: 0 };
-    pendingCandidate = null;
-    pendingCount = 0;
-  }
-
-  async function captureNow() {
-    // Força uma classificação imediata, ignorando a janela de suavização.
-    if (!model || !video.videoWidth) return;
-    setStatus("Analisando…");
-    try {
-      const predictions = await model.classify(video, 5);
-      const result = WasteClassifier.classifyWaste(predictions);
-      showResult(result);
-      lastShown = {
-        category: result.category,
-        objectName: result.objectName,
-        confidence: result.confidence,
-      };
-      pendingCandidate = null;
-      pendingCount = 0;
-      setStatus("Pronto.");
-    } catch (err) {
-      console.error(err);
-      setStatus("Falha ao analisar a imagem.");
-    }
-  }
-
-  // ===== Eventos =====
-  startBtn.addEventListener("click", async () => {
-    if (stream) {
-      stopCamera();
-      return;
-    }
-    startBtn.disabled = true;
-    try {
-      await loadModel();
-      await startCamera();
-    } finally {
-      startBtn.disabled = false;
-    }
-  });
-
-  captureBtn.addEventListener("click", captureNow);
+  // ----- Eventos -----
+  startBtn.addEventListener("click", startCamera);
+  captureBtn.addEventListener("click", captureAndClassify);
   switchBtn.addEventListener("click", switchCamera);
 
-  // Carrega o modelo em segundo plano assim que a página abre — assim, ao
-  // clicar em "Ligar câmera", a inferência começa rapidamente.
-  window.addEventListener("load", () => {
-    loadModel().catch(() => {});
+  window.addEventListener("pagehide", () => {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
   });
 
-  // Limpa stream se a aba for fechada ou recarregada.
-  window.addEventListener("pagehide", stopCamera);
+  // Onboarding na primeira vez
+  if (!hasApiKey()) {
+    openModal(onboardingModal);
+  }
 })();
