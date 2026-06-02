@@ -41,6 +41,15 @@
   const SETTINGS_KEY = "lixeira-inteligente.settings.v2";
   const DEFAULT_MODEL = "gemini-2.5-flash";
 
+  // Lê a chave / modelo embutidos pelo professor em config.js.
+  function getEmbeddedConfig() {
+    const cfg = window.AppConfig || {};
+    return {
+      apiKey: cfg.useEmbeddedKey ? (cfg.embeddedApiKey || "").trim() : "",
+      model: cfg.defaultModel || DEFAULT_MODEL,
+    };
+  }
+
   // ----- DOM -----
   const $ = (id) => document.getElementById(id);
   const video = $("video");
@@ -78,18 +87,42 @@
   let facingMode = "environment";
   let inFlight = null; // AbortController da requisição atual
 
-  // ----- Settings (localStorage) -----
+  // ----- Settings (localStorage + config embutido) -----
+  // Devolve sempre as configurações EFETIVAS. Ordem de prioridade:
+  //   1) Chave salva pelo usuário no navegador (Settings)
+  //   2) Chave embutida pelo professor em config.js
+  //   3) Vazio (dispara onboarding)
   function loadSettings() {
+    const embedded = getEmbeddedConfig();
+    let saved = { apiKey: "", model: "" };
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
-      if (!raw) return { apiKey: "", model: DEFAULT_MODEL };
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.apiKey === "string") saved.apiKey = parsed.apiKey;
+        if (typeof parsed.model === "string") saved.model = parsed.model;
+      }
+    } catch (_) {}
+
+    return {
+      apiKey: saved.apiKey || embedded.apiKey,
+      model: saved.model || embedded.model,
+      isEmbedded: !saved.apiKey && !!embedded.apiKey,
+    };
+  }
+  // Lê só o que está em localStorage (sem o fallback embutido). Usado
+  // pelo modal de Configurações para mostrar o que o usuário salvou.
+  function loadSavedOnly() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return { apiKey: "", model: "" };
       const parsed = JSON.parse(raw);
       return {
         apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
-        model: typeof parsed.model === "string" ? parsed.model : DEFAULT_MODEL,
+        model: typeof parsed.model === "string" ? parsed.model : "",
       };
     } catch (_) {
-      return { apiKey: "", model: DEFAULT_MODEL };
+      return { apiKey: "", model: "" };
     }
   }
   function saveSettings(s) {
@@ -115,10 +148,15 @@
     document.body.style.overflow = "";
   }
   function openSettings() {
-    const s = loadSettings();
-    apiKeyInput.value = s.apiKey;
+    const saved = loadSavedOnly();
+    const embedded = getEmbeddedConfig();
+    apiKeyInput.value = saved.apiKey;
     apiKeyInput.type = "password";
-    modelSelect.value = s.model;
+    // Se existe chave embutida, deixa claro que o campo é opcional.
+    apiKeyInput.placeholder = embedded.apiKey
+      ? "Deixe vazio para usar a chave do site"
+      : "AIza...";
+    modelSelect.value = saved.model || loadSettings().model;
     openModal(settingsModal);
     setTimeout(() => apiKeyInput.focus(), 80);
   }
@@ -147,7 +185,11 @@
     }
     saveSettings({ apiKey, model });
     closeModal(settingsModal);
-    setStatus(apiKey ? "Configurações salvas." : "Chave removida.", apiKey ? "" : "error");
+    // Mostra mensagem apropriada considerando a chave embutida (fallback).
+    const effective = loadSettings().apiKey;
+    if (apiKey) setStatus("Configurações salvas.");
+    else if (effective) setStatus("Usando a chave configurada no site.");
+    else setStatus("Chave removida.", "error");
   });
 
   onboardOpenSettings.addEventListener("click", () => {
