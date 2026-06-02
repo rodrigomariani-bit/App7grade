@@ -26,6 +26,11 @@
       bin: "Lixeira verde — cuidado com cacos",
       fallbackEmoji: "🍾",
     },
+    plastico: {
+      label: "Plástico",
+      bin: "Lixeira vermelha — limpe e amasse antes",
+      fallbackEmoji: "🧴",
+    },
     indefinido: {
       label: "Não identificado",
       bin: "Tente outra foto ou outro ângulo",

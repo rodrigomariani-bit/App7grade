@@ -13,7 +13,7 @@
 
   const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-  const CATEGORIES = ["organico", "papel", "metal", "vidro", "indefinido"];
+  const CATEGORIES = ["organico", "papel", "metal", "vidro", "plastico", "indefinido"];
 
   // Schema de saída — Gemini aceita um subset de OpenAPI 3.0.
   // Importante: NÃO usar `additionalProperties` (não é suportado).
@@ -34,7 +34,7 @@
       emoji: {
         type: "string",
         description:
-          "UM ÚNICO emoji (1 caractere visual) que melhor representa o item identificado. Exemplos: 🍌 casca/banana, 🍎 maçã, 🍊 laranja, 🥚 ovo, 🥦 brócolis, 🍞 pão, ☕ café, 🥫 lata de conserva, 🥤 lata de refrigerante, 🍾 garrafa de vidro, 🍷 taça, 🫙 pote de vidro, 📰 jornal, 📦 papelão, 📄 papel, 📚 livro, ✉️ envelope, 🔩 parafuso, 🔧 ferramenta. Para itens sem representação clara use ❓. NUNCA mais de um emoji.",
+          "UM ÚNICO emoji (1 caractere visual) que melhor representa o item identificado. Exemplos: 🍌 casca/banana, 🍎 maçã, 🍊 laranja, 🥚 ovo, 🥦 brócolis, 🍞 pão, ☕ café, 🥫 lata de conserva metálica, 🍾 garrafa de vidro, 🍷 taça, 🫙 pote de vidro, 📰 jornal, 📦 papelão, 📄 papel, 📚 livro, ✉️ envelope, 🔩 parafuso, 🔧 ferramenta, 🧴 frasco plástico/garrafa PET, 🛍️ sacola plástica, 🥤 copo plástico/canudo, 🪥 escova de dentes. Para itens sem representação clara use ❓. NUNCA mais de um emoji.",
       },
       reasoning: {
         type: "string",
@@ -51,14 +51,14 @@
         type: "string",
         enum: CATEGORIES,
         description:
-          "Categoria final, baseada no raciocínio acima. Use 'indefinido' SOMENTE para plástico, isopor, eletrônico, pilha, tecido, ou se realmente não houver objeto identificável.",
+          "Categoria final, baseada no raciocínio acima. Use 'indefinido' SOMENTE para isopor, eletrônico, pilha, lâmpada, tecido, fralda, embalagem metalizada (saco de salgadinho), ou se realmente não houver objeto identificável.",
       },
     },
     required: ["object_name", "emoji", "reasoning", "confidence", "category"],
     propertyOrdering: ["object_name", "emoji", "reasoning", "confidence", "category"],
   };
 
-  const SYSTEM_PROMPT = `Você é a IA visual de uma lixeira inteligente brasileira. Olhe a foto e classifique o item em UMA destas 4 categorias da Resolução Conama 275/2001:
+  const SYSTEM_PROMPT = `Você é a IA visual de uma lixeira inteligente brasileira. Olhe a foto e classifique o item em UMA destas 5 categorias da Resolução Conama 275/2001:
 
 🟫 ORGÂNICO — qualquer resto biológico que se decompõe.
    Ex.: cascas de fruta/legume/ovo, restos de comida (cozida ou crua), pão velho, borra de café, sachê de chá, folhas, podas, talos, sementes, ossos, guardanapo sujo de comida.
@@ -70,22 +70,27 @@
    Ex.: latas de alumínio (refrigerante, cerveja, energético), latas de aço (sardinha, leite condensado, conserva), tampas metálicas, talheres, panelas, frigideiras, ferramentas, pregos, parafusos, papel-alumínio.
 
 🍾 VIDRO — itens de vidro.
-   Ex.: garrafas (cerveja, vinho, refrigerante, suco), potes (geleia, palmito, conserva), copos, taças, frascos de cosméticos/perfume/remédio.
+   Ex.: garrafas (cerveja, vinho), potes (geleia, palmito, conserva), copos, taças, frascos de cosméticos/perfume/remédio.
 
-❓ INDEFINIDO — APENAS quando NENHUMA das 4 acima se aplica:
-   • Plástico (PET, sacolas, isopor, embalagem flexível, garrafa transparente leve)
+🧴 PLÁSTICO — itens plásticos.
+   Ex.: garrafas PET (refrigerante, água, suco — transparentes, leves), sacolas plásticas, potes de margarina/iogurte, embalagens de produtos de limpeza, copos descartáveis, canudos, tampas plásticas, brinquedos sem partes eletrônicas, escovas de dente, frascos de shampoo.
+
+❓ INDEFINIDO — APENAS quando NENHUMA das 5 acima se aplica:
+   • Isopor (EPS)
    • Eletrônicos, pilhas, baterias, lâmpadas
    • Tecido, couro, calçados, fraldas
+   • Embalagens metalizadas (saco de salgadinho, bolacha)
    • Madeira tratada, pneus
    • Foto sem objeto claro (paisagem, pessoa, cena vazia)
    • Foto borrada ou escura demais
 
 REGRAS IMPORTANTES:
-1. SEMPRE prefira uma das 4 categorias principais quando o item plausivelmente se encaixa nelas. "Indefinido" é o ÚLTIMO recurso.
+1. SEMPRE prefira uma das 5 categorias principais. "Indefinido" é o ÚLTIMO recurso.
 2. Identifique o item ESPECÍFICO mesmo se for resto. "Casca de banana" (orgânico), não "Banana". "Maçã mordida" (orgânico). "Lata amassada" continua sendo lata (metal).
-3. Garrafa transparente fina e leve = plástico PET → indefinido. Garrafa pesada, parede grossa, geralmente colorida e com brilho nítido = vidro.
+3. PLÁSTICO vs VIDRO: garrafa transparente, fina, leve, com listras de molde no fundo, pescoço afilado = PLÁSTICO (PET). Garrafa pesada, parede grossa, geralmente colorida, com brilho nítido e som de "tlim" = VIDRO.
 4. Embalagem cartonada (caixa de leite, de suco) é PAPEL (mesmo que tenha película interna).
-5. Se o objeto NÃO está claro mas você consegue palpitar com base no formato/cor, use confiança "media" ou "baixa" e ESCOLHA uma das 4 principais — não fuja para indefinido.
+5. Saco de salgadinho/bolacha (interior espelhado) é INDEFINIDO (embalagem metalizada, não recicla bem).
+6. Se o objeto não está claro mas você consegue palpitar pelo formato/cor, use confiança "media" ou "baixa" e ESCOLHA uma das 5 principais — não fuja para indefinido.
 
 Responda primeiro descrevendo o item e raciocinando. Só então comprometa-se com a categoria.`;
 

@@ -36,6 +36,10 @@
   --c-vidro-bg: #cdf2dc;
   --c-vidro-ring: #6dd0a0;
 
+  --c-plastico-fg: #b91c1c;
+  --c-plastico-bg: #fde2e2;
+  --c-plastico-ring: #f4a3a3;
+
   --c-indef-fg: #52525b;
   --c-indef-bg: #ececea;
   --c-indef-ring: #c9c8c2;
@@ -473,20 +477,23 @@ input, select { font: inherit; color: inherit; }
 }
 
 /* Per-category coloring on the modal card */
-.result-card[data-category="organico"] .result-photo-badge { background: var(--c-organico-bg); color: var(--c-organico-fg); }
-.result-card[data-category="papel"]    .result-photo-badge { background: var(--c-papel-bg);    color: var(--c-papel-fg); }
-.result-card[data-category="metal"]    .result-photo-badge { background: var(--c-metal-bg);    color: var(--c-metal-fg); }
-.result-card[data-category="vidro"]    .result-photo-badge { background: var(--c-vidro-bg);    color: var(--c-vidro-fg); }
+.result-card[data-category="organico"] .result-photo-badge { background: var(--c-organico-bg); color: var(--c-organico-fg); border-color: var(--c-organico-fg); }
+.result-card[data-category="papel"]    .result-photo-badge { background: var(--c-papel-bg);    color: var(--c-papel-fg);    border-color: var(--c-papel-fg); }
+.result-card[data-category="metal"]    .result-photo-badge { background: var(--c-metal-bg);    color: var(--c-metal-fg);    border-color: var(--c-metal-fg); }
+.result-card[data-category="vidro"]    .result-photo-badge { background: var(--c-vidro-bg);    color: var(--c-vidro-fg);    border-color: var(--c-vidro-fg); }
+.result-card[data-category="plastico"] .result-photo-badge { background: var(--c-plastico-bg); color: var(--c-plastico-fg); border-color: var(--c-plastico-fg); }
 
 .result-card[data-category="organico"] .result-category-label { color: var(--c-organico-fg); }
 .result-card[data-category="papel"]    .result-category-label { color: var(--c-papel-fg); }
 .result-card[data-category="metal"]    .result-category-label { color: var(--c-metal-fg); }
 .result-card[data-category="vidro"]    .result-category-label { color: var(--c-vidro-fg); }
+.result-card[data-category="plastico"] .result-category-label { color: var(--c-plastico-fg); }
 
 .result-card[data-category="organico"] .bin-pill { background: var(--c-organico-fg); }
 .result-card[data-category="papel"]    .bin-pill { background: var(--c-papel-fg); }
 .result-card[data-category="metal"]    .bin-pill { background: var(--c-metal-fg); }
 .result-card[data-category="vidro"]    .bin-pill { background: var(--c-vidro-fg); }
+.result-card[data-category="plastico"] .bin-pill { background: var(--c-plastico-fg); }
 
 /* ============ Legend ============ */
 .legend h3 {
@@ -693,7 +700,7 @@ input, select { font: inherit; color: inherit; }
 /* ============ Responsive ============ */
 @media (min-width: 600px) {
   .app { padding: 28px; gap: 24px; }
-  .legend-grid { grid-template-columns: repeat(4, 1fr); }
+  .legend-grid { grid-template-columns: repeat(5, 1fr); }
   .actions { grid-template-columns: auto 1fr auto; }
   .actions .btn-primary { order: 0; }
   .actions .btn-accent { order: 1; }
