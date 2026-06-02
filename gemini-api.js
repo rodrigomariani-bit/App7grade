@@ -112,6 +112,7 @@ Responda primeiro descrevendo o item e raciocinando. Só então comprometa-se co
       imageBase64,
       mediaType = "image/jpeg",
       signal,
+      onRetry,
     } = opts;
 
     if (!apiKey) throw new ApiError("missing_api_key", "Chave de API não configurada.");
@@ -157,37 +158,97 @@ Responda primeiro descrevendo o item e raciocinando. Só então comprometa-se co
       ],
     };
 
-    let response;
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (err) {
-      if (err && err.name === "AbortError") throw err;
-      throw new ApiError(
-        "network_error",
-        "Falha de rede ao chamar a API. Verifique sua conexão.",
-        err
-      );
-    }
+    // Tenta algumas vezes em caso de limite por minuto (429) ou
+    // instabilidade do servidor (5xx). Assim, se vários alunos clicam
+    // ao mesmo tempo, o app espera e tenta de novo sozinho em vez de
+    // mostrar erro — a foto acaba saindo depois de alguns segundos.
+    const MAX_ATTEMPTS = 3;
+    let lastNetworkError = null;
 
-    if (!response.ok) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal,
+        });
+      } catch (err) {
+        if (err && err.name === "AbortError") throw err;
+        lastNetworkError = new ApiError(
+          "network_error",
+          "Falha de rede ao chamar a API. Verifique sua conexão.",
+          err
+        );
+        if (attempt < MAX_ATTEMPTS) {
+          if (typeof onRetry === "function") onRetry({ attempt, reason: "network" });
+          await sleep(attempt * 1500, signal);
+          continue;
+        }
+        throw lastNetworkError;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        return parseResult(data);
+      }
+
       let detail = null;
       try { detail = await response.json(); } catch (_) {}
       const errStatus = (detail && detail.error && detail.error.status) || "";
       const errMsg = (detail && detail.error && detail.error.message) || `HTTP ${response.status}`;
-      throw new ApiError(
-        mapErrorType(response.status, errStatus, errMsg),
-        friendlyError(response.status, errStatus, errMsg),
-        detail
-      );
+      const type = mapErrorType(response.status, errStatus, errMsg);
+
+      if ((type === "rate_limit" || type === "server") && attempt < MAX_ATTEMPTS) {
+        const waitMs = retryDelayMs(detail, attempt);
+        if (typeof onRetry === "function") onRetry({ attempt, reason: type, waitMs });
+        await sleep(waitMs, signal);
+        continue;
+      }
+
+      throw new ApiError(type, friendlyError(response.status, errStatus, errMsg), detail);
     }
 
-    const data = await response.json();
-    return parseResult(data);
+    // Inalcançável na prática — salvaguarda.
+    throw lastNetworkError || new ApiError("api_error", "Falha após várias tentativas.");
+  }
+
+  // Espera `ms` milissegundos, cancelável pelo AbortSignal.
+  function sleep(ms, signal) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(resolve, ms);
+      if (signal) {
+        signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            const e = new Error("Aborted");
+            e.name = "AbortError";
+            reject(e);
+          },
+          { once: true }
+        );
+      }
+    });
+  }
+
+  // Quanto esperar antes de tentar de novo. O Gemini às vezes manda um
+  // "retryDelay" (ex.: "5s") no corpo do erro 429; se vier, respeitamos.
+  // Senão, backoff: 2s, 4s, 6s…
+  function retryDelayMs(detail, attempt) {
+    try {
+      const details = detail && detail.error && detail.error.details;
+      if (Array.isArray(details)) {
+        for (const d of details) {
+          if (d && typeof d.retryDelay === "string") {
+            const m = d.retryDelay.match(/([\d.]+)s/);
+            if (m) return Math.min(Math.ceil(parseFloat(m[1]) * 1000) + 250, 15000);
+          }
+        }
+      }
+    } catch (_) {}
+    return Math.min(attempt * 2000, 8000);
   }
 
   function parseResult(data) {

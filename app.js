@@ -305,6 +305,14 @@
         model: settings.model,
         imageBase64,
         signal: inFlight.signal,
+        onRetry: ({ reason }) => {
+          setStatus(
+            reason === "rate_limit"
+              ? "Muita gente usando ao mesmo tempo — só um instante…"
+              : "Reconectando…",
+            "busy"
+          );
+        },
       });
       showResult(result, imageBase64);
       setStatus("Pronto.", "live");
