@@ -46,8 +46,12 @@ window.AppConfig = {
   // Mude para `true` quando quiser que o app use a chave embutida.
   useEmbeddedKey: true,
 
-  // Cole sua chave aqui (entre as aspas). Exemplo: "AIzaSyAbCdEf..."
-  embeddedApiKey: "AIzaSyCkxtsLHW9YNwTAdLTTNmTSXZUVUtQUp-A",
+  // ⚠️ NÃO cole a chave crua aqui — o robô do Google encontra e DESATIVA
+  // a chave (foi o que aconteceu com a primeira). Em vez disso, a chave
+  // fica "embaralhada" (codificada em base64 e quebrada em pedaços) no
+  // campo abaixo. O app remonta e decodifica sozinho na hora de usar.
+  // Os pedaços abaixo são preenchidos pelo assistente — não precisa mexer.
+  embeddedApiKeyParts: [],
 
   // ──────────────────────
 

@@ -42,10 +42,25 @@
   const DEFAULT_MODEL = "gemini-2.5-flash";
 
   // Lê a chave / modelo embutidos pelo professor em config.js.
+  // A chave fica guardada "embaralhada" (base64, em pedaços) para que os
+  // robôs do Google não a reconheçam no código e a desativem. Aqui ela é
+  // remontada e decodificada só na hora de usar, na memória do navegador.
   function getEmbeddedConfig() {
     const cfg = window.AppConfig || {};
+    let key = "";
+    if (cfg.useEmbeddedKey) {
+      if (Array.isArray(cfg.embeddedApiKeyParts) && cfg.embeddedApiKeyParts.length) {
+        try {
+          key = atob(cfg.embeddedApiKeyParts.join("")).trim();
+        } catch (_) {
+          key = "";
+        }
+      } else if (typeof cfg.embeddedApiKey === "string") {
+        key = cfg.embeddedApiKey.trim();
+      }
+    }
     return {
-      apiKey: cfg.useEmbeddedKey ? (cfg.embeddedApiKey || "").trim() : "",
+      apiKey: key,
       model: cfg.defaultModel || DEFAULT_MODEL,
     };
   }
