@@ -195,8 +195,8 @@
   saveSettingsBtn.addEventListener("click", () => {
     const apiKey = apiKeyInput.value.trim();
     const model = modelSelect.value;
-    if (apiKey && !apiKey.startsWith("AIza")) {
-      if (!confirm("Esta chave não começa com 'AIza' (formato esperado das chaves do Google AI Studio). Salvar mesmo assim?")) return;
+    if (apiKey && !apiKey.startsWith("AIza") && !apiKey.startsWith("AQ.")) {
+      if (!confirm("Esta chave não começa com 'AIza' nem 'AQ.' (formatos esperados das chaves do Google AI Studio). Salvar mesmo assim?")) return;
     }
     saveSettings({ apiKey, model });
     closeModal(settingsModal);

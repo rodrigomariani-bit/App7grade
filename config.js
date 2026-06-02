@@ -51,7 +51,11 @@ window.AppConfig = {
   // fica "embaralhada" (codificada em base64 e quebrada em pedaços) no
   // campo abaixo. O app remonta e decodifica sozinho na hora de usar.
   // Os pedaços abaixo são preenchidos pelo assistente — não precisa mexer.
-  embeddedApiKeyParts: [],
+  embeddedApiKeyParts: [
+    "QVEuQWI4Uk42Smc1cUZ0Y21m",
+    "RWVITFhOUWZYS0VtNGR0UGs5",
+    "X2xyUkNLUmV6LThMRGwtY2c=",
+  ],
 
   // ──────────────────────
 
