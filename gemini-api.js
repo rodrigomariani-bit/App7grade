@@ -31,6 +31,11 @@
         description:
           "Nome curto do objeto em português brasileiro, mesmo que seja resto/sobra. Ex.: 'Casca de banana', 'Maçã mordida', 'Lata de refrigerante amassada', 'Garrafa de cerveja'. Máximo 6 palavras.",
       },
+      emoji: {
+        type: "string",
+        description:
+          "UM ÚNICO emoji (1 caractere visual) que melhor representa o item identificado. Exemplos: 🍌 casca/banana, 🍎 maçã, 🍊 laranja, 🥚 ovo, 🥦 brócolis, 🍞 pão, ☕ café, 🥫 lata de conserva, 🥤 lata de refrigerante, 🍾 garrafa de vidro, 🍷 taça, 🫙 pote de vidro, 📰 jornal, 📦 papelão, 📄 papel, 📚 livro, ✉️ envelope, 🔩 parafuso, 🔧 ferramenta. Para itens sem representação clara use ❓. NUNCA mais de um emoji.",
+      },
       reasoning: {
         type: "string",
         description:
@@ -49,8 +54,8 @@
           "Categoria final, baseada no raciocínio acima. Use 'indefinido' SOMENTE para plástico, isopor, eletrônico, pilha, tecido, ou se realmente não houver objeto identificável.",
       },
     },
-    required: ["object_name", "reasoning", "confidence", "category"],
-    propertyOrdering: ["object_name", "reasoning", "confidence", "category"],
+    required: ["object_name", "emoji", "reasoning", "confidence", "category"],
+    propertyOrdering: ["object_name", "emoji", "reasoning", "confidence", "category"],
   };
 
   const SYSTEM_PROMPT = `Você é a IA visual de uma lixeira inteligente brasileira. Olhe a foto e classifique o item em UMA destas 4 categorias da Resolução Conama 275/2001:
@@ -229,6 +234,7 @@ Responda primeiro descrevendo o item e raciocinando. Só então comprometa-se co
     if (!["alta", "media", "baixa"].includes(parsed.confidence)) parsed.confidence = "media";
     parsed.object_name = String(parsed.object_name || "Objeto não identificado");
     parsed.reasoning = String(parsed.reasoning || "");
+    parsed.emoji = String(parsed.emoji || "").trim() || null;
 
     return parsed;
   }

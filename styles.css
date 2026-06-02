@@ -317,11 +317,14 @@ input, select { font: inherit; color: inherit; }
 .result-close:hover { background: #fff; }
 .result-close:active { transform: scale(.94); }
 
+.result-photo-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
 .result-photo {
   position: relative;
   aspect-ratio: 4 / 3;
   background: #0c0c0e;
-  flex-shrink: 0;
   overflow: hidden;
 }
 .result-photo img {
@@ -329,35 +332,77 @@ input, select { font: inherit; color: inherit; }
   object-fit: cover;
   display: block;
 }
-.result-photo-badge {
+/* Gradient suave no rodapé da foto, para o badge respirar melhor sobre cores variadas. */
+.result-photo-shade {
   position: absolute;
-  bottom: 16px; left: 16px;
-  width: 64px; height: 64px;
-  border-radius: 18px;
+  inset: auto 0 0 0;
+  height: 40%;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, .35) 100%);
+  pointer-events: none;
+}
+/* Âncora fica posicionada (translateX centralizado) e o badge dentro dela
+   anima livremente, evitando conflito entre o pop-in e a flutuação. */
+.result-photo-badge-anchor {
+  position: absolute;
+  left: 50%;
+  bottom: -58px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+.result-photo-badge {
+  width: 116px; height: 116px;
+  border-radius: 30px;
   display: grid; place-items: center;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, .25), 0 0 0 4px rgba(255, 255, 255, .3);
-  background: var(--c-indef-bg);
-  color: var(--c-indef-fg);
-  animation: badge-pop .35s cubic-bezier(.18, .89, .32, 1.18) .12s both;
+  background: #ffffff;
+  border: 5px solid var(--c-indef-fg);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, .22),
+    0 4px 10px rgba(0, 0, 0, .08),
+    0 0 0 6px rgba(255, 255, 255, .25);
+  animation:
+    badge-pop .6s cubic-bezier(.18, .89, .32, 1.42) .18s both,
+    badge-float 3.6s ease-in-out 1.1s infinite;
+}
+.result-emoji {
+  font-size: 64px;
+  line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .08));
+  display: inline-block;
+  animation: emoji-tilt 3.6s ease-in-out 1.1s infinite;
 }
 @keyframes badge-pop {
-  from { opacity: 0; transform: scale(.4); }
-  to { opacity: 1; transform: scale(1); }
+  0%   { opacity: 0; transform: scale(.2) rotate(-22deg); }
+  55%  { opacity: 1; transform: scale(1.18) rotate(8deg); }
+  78%  { transform: scale(.94) rotate(-4deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+@keyframes badge-float {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -5px; }
+}
+@keyframes emoji-tilt {
+  0%, 100% { transform: rotate(-3deg); }
+  50%      { transform: rotate(3deg); }
 }
 
 .result-body {
-  padding: 22px 22px 18px;
+  padding: 78px 22px 18px;  /* topo generoso pra acomodar metade do badge sobreposto */
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  text-align: center;
 }
 
 .result-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 6px;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 .result-category-label {
   font-size: 11px;
@@ -477,16 +522,14 @@ input, select { font: inherit; color: inherit; }
   color: var(--text-muted);
   line-height: 1.4;
 }
-.legend-icon {
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  display: grid; place-items: center;
+.legend-emoji {
+  font-size: 28px;
+  line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
   margin-bottom: 2px;
 }
-.legend-card[data-category="organico"] .legend-icon { background: var(--c-organico-bg); color: var(--c-organico-fg); }
-.legend-card[data-category="papel"]    .legend-icon { background: var(--c-papel-bg); color: var(--c-papel-fg); }
-.legend-card[data-category="metal"]    .legend-icon { background: var(--c-metal-bg); color: var(--c-metal-fg); }
-.legend-card[data-category="vidro"]    .legend-icon { background: var(--c-vidro-bg); color: var(--c-vidro-fg); }
 
 /* ============ Footer ============ */
 .foot {

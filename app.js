@@ -9,27 +9,27 @@
     organico: {
       label: "Orgânico",
       bin: "Lixeira marrom — pode virar adubo",
-      icon: '<path d="M12 22s-7-5-7-12a7 7 0 0 1 14 0c0 7-7 12-7 12z"/><path d="M12 14a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>',
+      fallbackEmoji: "🌱",
     },
     papel: {
       label: "Papel",
       bin: "Lixeira azul — mantenha seco e limpo",
-      icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h2"/>',
+      fallbackEmoji: "📰",
     },
     metal: {
       label: "Metal",
       bin: "Lixeira amarela — lave antes de descartar",
-      icon: '<path d="M8 2h8v4l-1 2v10a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2V8L8 6z"/><path d="M8 6h8"/>',
+      fallbackEmoji: "🥫",
     },
     vidro: {
       label: "Vidro",
       bin: "Lixeira verde — cuidado com cacos",
-      icon: '<path d="M10 2h4v3l2 3v11a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3V8l2-3z"/>',
+      fallbackEmoji: "🍾",
     },
     indefinido: {
       label: "Não identificado",
       bin: "Tente outra foto ou outro ângulo",
-      icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7M12 17h.01"/>',
+      fallbackEmoji: "❓",
     },
   };
 
@@ -51,8 +51,9 @@
 
   const resultModal = $("resultModal");
   const resultCard = resultModal.querySelector(".result-card");
+  const resultBadge = $("resultBadge");
   const resultPhoto = $("resultPhoto");
-  const resultIcon = $("resultIcon");
+  const resultEmoji = $("resultEmoji");
   const resultCategory = $("resultCategory");
   const resultObject = $("resultObject");
   const resultConfidence = $("resultConfidence");
@@ -268,7 +269,7 @@
 
     resultPhoto.src = "data:image/jpeg;base64," + imageBase64;
     resultCard.dataset.category = r.category;
-    resultIcon.innerHTML = info.icon;
+    resultEmoji.textContent = r.emoji || info.fallbackEmoji;
     resultCategory.textContent = info.label;
     resultObject.textContent = r.object_name;
     resultExplanation.textContent = r.reasoning;
@@ -279,6 +280,11 @@
       r.confidence === "media" ? "Confiança média" :
       "Confiança baixa";
     resultConfidence.className = "result-confidence " + r.confidence;
+
+    // Reinicia a animação do badge a cada novo resultado.
+    resultBadge.style.animation = "none";
+    void resultBadge.offsetWidth;
+    resultBadge.style.animation = "";
 
     openModal(resultModal);
   }
