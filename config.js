@@ -44,10 +44,10 @@ window.AppConfig = {
   // ───── EDITE AQUI ─────
 
   // Mude para `true` quando quiser que o app use a chave embutida.
-  useEmbeddedKey: false,
+  useEmbeddedKey: true,
 
   // Cole sua chave aqui (entre as aspas). Exemplo: "AIzaSyAbCdEf..."
-  embeddedApiKey: "",
+  embeddedApiKey: "AIzaSyCkxtsLHW9YNwTAdLTTNmTSXZUVUtQUp-A",
 
   // ──────────────────────
 
